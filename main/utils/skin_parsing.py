@@ -123,8 +123,14 @@ def _segformer_model():
         import torch
         from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 
-        processor = SegformerImageProcessor.from_pretrained(_SEGFORMER_REPO)
-        model = SegformerForSemanticSegmentation.from_pretrained(_SEGFORMER_REPO)
+        # Cache into model_dir() rather than the default ~/.cache/huggingface. The
+        # checkpoint is a 323 MB SegFormer-B5, and on an ephemeral runtime (Colab)
+        # the default cache is wiped between sessions, so it gets re-downloaded
+        # every time -- unauthenticated, and slow enough to look like a hang. Point
+        # STW_MODEL_DIR at persistent storage (a mounted Drive) and it downloads once.
+        cache = model_dir()
+        processor = SegformerImageProcessor.from_pretrained(_SEGFORMER_REPO, cache_dir=cache)
+        model = SegformerForSemanticSegmentation.from_pretrained(_SEGFORMER_REPO, cache_dir=cache)
         model.eval()
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model.to(device)
@@ -165,6 +171,25 @@ def parser_skin_mask(img_rgb, backend=DEFAULT_BACKEND):
             f"unknown backend {backend!r}, expected one of {sorted(_BACKENDS)}"
         )
     return _BACKENDS[backend](img_rgb)
+
+
+def prefetch(backend=DEFAULT_BACKEND):
+    """Download and load the backend's weights now.
+
+    Otherwise the first image of a 40k-image run pays for the download, which looks
+    like the loop has hung rather than like a fetch in progress. Call it once, up
+    front, in a notebook cell of its own.
+    """
+    print(f"Fetching {backend} weights into {model_dir()} ...")
+    if backend == "segformer":
+        _segformer_model()
+    elif backend == "mediapipe":
+        _mediapipe_segmenter()
+    else:
+        raise ValueError(
+            f"unknown backend {backend!r}, expected one of {sorted(_BACKENDS)}"
+        )
+    print(f"{backend} ready.")
 
 
 # --------------------------------------------------------------------------- #

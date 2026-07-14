@@ -130,8 +130,36 @@ To use it directly:
 
 ```python
 from main.utils import skin_parsing as sp
+sp.prefetch()                                            # fetch weights up front
 skin = sp.segment_skin(img_rgb, backend="segformer", crop=True)
 ```
+
+### Running it in a notebook (Colab)
+
+The `segformer` checkpoint is a **323 MB** SegFormer-B5. On an ephemeral runtime the
+default HuggingFace cache is wiped between sessions, so it is re-downloaded every time
+— unauthenticated, throttled, and slow enough that a run looks like it has hung at
+`model.safetensors`. Point the cache at your mounted Drive and it downloads once:
+
+```python
+import os
+from google.colab import drive
+drive.mount('/content/drive')
+
+os.environ['STW_MODEL_DIR'] = '/content/drive/MyDrive/stw_models'   # persists across sessions
+os.environ['HF_TOKEN'] = '...'                                      # optional: lifts the rate limit
+
+from main.utils import skin_parsing as sp
+sp.prefetch()          # run this in its own cell, before any loop over images
+```
+
+`prefetch()` exists so the download is an explicit step rather than something that
+happens silently inside the first iteration of a 40k-image loop, where it is
+indistinguishable from a hang. If the download does stall, interrupt and re-run it —
+HuggingFace resumes rather than restarting.
+
+If you cannot afford the 323 MB at all, `--backend mediapipe` needs only a 250 KB
+tflite — but see the table above for what it gives up.
 
 ⚠️ If you regenerate the dataset with this, retrain before you infer with it — a model
 trained on beard-included crops and served beard-removed crops is a train/serve mismatch.
