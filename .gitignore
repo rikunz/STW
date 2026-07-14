@@ -1,0 +1,8 @@
+data/*
+.venv
+__pycache__
+*.pyc
+*.pyo
+images.zip
+train_notebooks
+img_align_celeba.zip
