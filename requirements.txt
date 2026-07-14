@@ -21,6 +21,7 @@ seaborn
 
 # Specialized Tools
 mediapipe==0.10.21
+transformers   # face parsing backend for main/utils/skin_parsing.py
 grad-cam
 gdown
 requests

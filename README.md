@@ -74,6 +74,70 @@ chmod +x data/dataset_creation/create_data.sh
 
 ---
 
+## 🧔 Skin parsing (removing hair from the skin crops)
+
+The segmented crops are built from MediaPipe landmark polygons alone, and those are
+purely geometric: the `FACE` oval keeps every pixel inside the face contour, so beard,
+eyebrows, glasses and hair falling over the forehead all survive into the "skin only"
+images. Being dark, they pull the predicted skin tone toward a darker shade.
+
+`main/utils/skin_parsing.py` intersects the same polygons with a face-parsing model, so
+only pixels the model calls skin are kept:
+
+```
+FACE oval, minus eyes/mouth/eyebrows   (geometric, as before)
+& parser skin mask                     (semantic: which pixels are actually skin)
+```
+
+Measured against the current pipeline (mean RGB of the retained skin, `segformer`):
+
+| face | before | after | |
+| :--- | :--- | :--- | :--- |
+| thick beard + glasses | (119, 80, 69) | (138, 93, 81) | beard and lenses gone |
+| clean-shaven, dark skin | (50, 43, 41) | (52, 45, 43) | unchanged |
+| clean-shaven, dark skin | (117, 85, 79) | (123, 88, 83) | unchanged |
+| clean-shaven, light skin | (217, 164, 134) | (214, 166, 139) | unchanged |
+
+Faces with no hair inside the old mask come out essentially unchanged, which is what
+makes this safe to run over the whole dataset.
+
+**It does not remove stubble or light beard.** Face parsers label those as `skin`. The
+obvious patch -- find the rest of the beard by how dark or rough it is against the
+subject's own skin -- was implemented and measured, and it does not work: clean-shaven
+faces with a shadowed jaw score *darker and rougher* in the lower face than genuinely
+bearded ones, so every threshold that removed stubble also ate the chin off a
+clean-shaven face. Colour cannot tell beard from shade, so no such filter ships. See the
+module docstring for the alternative (`BEARD_FREE_REGIONS`, an anatomical cut that
+guarantees no stubble but costs the cheeks) and why it is not the default either.
+
+It writes a **new dataset variant** and leaves the existing ones untouched, so the two
+can be compared:
+
+```bash
+python data/dataset_creation/images/skin_parsed_dataset.py            # -> data/images/all_cropped_skin_parsed_images
+python data/dataset_creation/images/skin_parsed_dataset.py --backend mediapipe
+```
+
+| Backend | Dependency | Notes |
+| :--- | :--- | :--- |
+| `segformer` (default) | `transformers` | `jonathandinu/face-parsing` (CelebAMask-HQ). Removes hair, eyebrows, glasses, lips, ears, and a full beard, which the dataset labels as `hair`. |
+| `mediapipe` | none (already required) | `selfie_multiclass_256x256`. CPU-fast, but it only knows head hair: it calls beard, eyebrows and glasses face skin, and left the thick-beard case above at (121, 82, 70) — barely moved. Use it only if `transformers` is not an option. |
+
+Weights download on first use into `data/models/` (override with `STW_MODEL_DIR`). The
+default backend can be overridden with `STW_SKIN_BACKEND`.
+
+To use it directly:
+
+```python
+from main.utils import skin_parsing as sp
+skin = sp.segment_skin(img_rgb, backend="segformer", crop=True)
+```
+
+⚠️ If you regenerate the dataset with this, retrain before you infer with it — a model
+trained on beard-included crops and served beard-removed crops is a train/serve mismatch.
+
+---
+
 ## 🛠️ Usage
 
 Training script and other stuff will come out soon.

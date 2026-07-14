@@ -2,6 +2,8 @@ echo "Creating full image dataset..."
 python data/dataset_creation/images/full_image_dataset.py
 echo "Creating skin only dataset..."
 python data/dataset_creation/images/skin_only_dataset.py
+echo "Creating skin parsed dataset (skin only, facial hair removed)..."
+python data/dataset_creation/images/skin_parsed_dataset.py
 echo "Creating cheeks and nose dataset..."
 python data/dataset_creation/images/cheeks_and_nose_dataset.py
 
